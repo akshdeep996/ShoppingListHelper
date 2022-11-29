@@ -42,6 +42,10 @@ func print() {
 	fmt.Println("=================")
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func createTask(title string, author string, taskItems []TaskItem) Task {
 	taskObject := Task{
 		ID:        (uuid.New()).String(),
@@ -88,6 +92,7 @@ func addTaskItem(taskListID string, taskItem TaskItem) Task {
 }
 
 func getTaskList() []Task {
+
 	return taskArray
 }
 
@@ -97,7 +102,28 @@ func getTaskListByID(taskID string) (Task, error) {
 			return task, nil
 		}
 	}
-	return Task{}, errors.New("Book not found")
+	return Task{}, errors.New("Task not found")
+}
+
+func deleteTaskListByID(taskID string) (bool, error) {
+	i := 0
+	isFound := false
+	for _, task := range taskArray {
+		if task.ID == taskID {
+			isFound = true
+			break
+		}
+		i++
+	}
+
+	if isFound {
+		taskArray[i] = taskArray[len(taskArray)-1]
+		taskArray = taskArray[:len(taskArray)-1]
+		return true, nil
+	} else {
+		return false, errors.New("Task not found")
+	}
+
 }
 
 func updateTask(newTask Task) Task {
@@ -113,7 +139,14 @@ func updateTask(newTask Task) Task {
 
 // APIS
 func getTaskListAPI(c *gin.Context) {
+	// c.IndentedJSON(http.StatusOK, gin.H{"Access-Control-Allow-Origin": "*"})
+	// c.IndentedJSON(http.StatusOK, gin.H{"Access-Control-Allow-Headers": "authentication, content-type"})
+	// c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+	// c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+	// c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+	// c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
 	c.IndentedJSON(http.StatusOK, getTaskList())
+
 }
 
 func getTaskListByIDAPI(c *gin.Context) {
@@ -124,7 +157,27 @@ func getTaskListByIDAPI(c *gin.Context) {
 		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Task not found"})
 		return
 	}
+
 	c.IndentedJSON(http.StatusOK, task)
+}
+
+func deleteTaskListByIDAPI(c *gin.Context) {
+	taskID := c.Param("taskID")
+	status, err := deleteTaskListByID(taskID)
+
+	if err != nil {
+		c.IndentedJSON(http.StatusNotFound, gin.H{"message": "Task not found"})
+		return
+	}
+
+	if !status {
+		c.IndentedJSON(http.StatusInternalServerError, gin.H{"message": "Delete operation failed"})
+		return
+	}
+	// c.IndentedJSON(http.StatusOK, gin.H{"Access-Control-Allow-Origin": "*"})
+	// c.IndentedJSON(http.StatusOK, gin.H{"Access-Control-Allow-Headers": "authentication, content-type"})
+
+	c.IndentedJSON(http.StatusOK, status)
 }
 
 func createTaskListAPI(c *gin.Context) {
@@ -145,23 +198,43 @@ func putTaskListAPI(c *gin.Context) {
 	task = updateTask(task)
 	c.IndentedJSON(http.StatusCreated, task)
 }
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Header("Access-Control-Allow-Methods", "POST,HEAD,PATCH, OPTIONS, GET, PUT")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
 
 func main() {
+
 	router := gin.Default()
+	router.Use(CORSMiddleware())
 	router.GET("/tasks", getTaskListAPI)
 	router.GET("/tasks/:taskID", getTaskListByIDAPI)
 	router.PUT("/tasks", putTaskListAPI)
 	router.POST("/tasks", createTaskListAPI)
-	router.Run("localhost:8080")
+	router.DELETE("/tasks/:taskID", deleteTaskListByIDAPI)
+
+	router.Run("localhost:9090")
 
 	// Uncomment to test he changes locally by printing messaged to console
-	// localTest()
+	localTest()
 }
 
 func localTest() {
 	task := createTask(
 		"Shopping List",
-		"Prasenjeet Paul",
+		"Akshdeep Singh",
 		make([]TaskItem, 0),
 	)
 	addTask(task)
